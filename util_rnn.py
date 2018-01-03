@@ -1,14 +1,11 @@
 import numpy as np
-import random
 import midi
-import cPickle
+
+MIDI_START = 21
+MIDI_END = 108
 
 
 class Util:
-    MIDI_START = 21
-    MIDI_END = 108
-    INPUT_SIZE = MIDI_END - MIDI_START + 1
-
     @staticmethod
     def sample(predictions, temperature=1.0):
         """
@@ -24,33 +21,15 @@ class Util:
         return np.argmax(probabilities)
 
     @staticmethod
+    def is_continue_symbol(symbol):
+        return symbol == MIDI_END - MIDI_START + 1
+
+    @staticmethod
     def index_to_midi(index):
-        value = index + Util.MIDI_START
-        if value < Util.MIDI_START or value > Util.MIDI_END:
+        value = index + MIDI_START
+        if value < MIDI_START or value > MIDI_END:
             raise Exception("Midi number " + str(value) + " out of bounds.")
         return value
-
-    @staticmethod
-    def midi_to_index(midi):
-        if midi < Util.MIDI_START or midi > Util.MIDI_END:
-            raise Exception("Midi number " + str(midi) + " out of bounds.")
-        return midi - Util.MIDI_START
-
-    @staticmethod
-    def tensor_to_midi(name, tensor):
-        """
-        :param name: Name of file to be created
-        :param tensor: A tensor of shape [num_timesteps, 88]
-        :return:
-        """
-        piano_roll = []
-        for probabilities in tensor:
-            timestep = []
-            for index, probability in enumerate(probabilities):
-                if random.random() < probability:
-                    timestep.append(Util.index_to_midi(index))
-            piano_roll.append(timestep)
-        Util.piano_roll_to_midi(piano_roll, name)
 
     @staticmethod
     def piano_roll_to_midi(piano_roll, filename):
@@ -91,23 +70,6 @@ class DataHandler:
         pass
 
     @staticmethod
-    def generate_data_npy(pickle_path):
-        dataset = cPickle.load(file(pickle_path))
-        all_pieces = dataset['train'] + dataset['test'] + dataset['valid']
-        all_data = []
-        for piece in all_pieces:
-            all_data += piece
-            all_data += [[]] * 8
-        print(all_data[0])
-        data = np.zeros((len(all_data), Util.INPUT_SIZE))
-        for index, timestep in enumerate(all_data):
-            for midi in timestep:
-                data[index, Util.midi_to_index(midi)] = 1
-        print(data.shape)
-        np.save('./data/midi.npy', data)
-        return data
-
-    @staticmethod
     def preprocess(dataset, batch_size):
         """
         :param batch_size: Size of the batches for reshaping
@@ -125,18 +87,12 @@ class DataHandler:
 
         data = []
         for time_step in continuous:
-            random.shuffle(time_step)
-            for note in time_step: # sorted(time_step, reverse=True):
-                data.append(note - Util.MIDI_START)
-            data.append(Util.MIDI_END - Util.MIDI_START + 1)
+            for note in sorted(time_step, reverse=True):
+                data.append(note - MIDI_START)
+            data.append(MIDI_END - MIDI_START + 1)
 
         sequence_length = int(len(data) / batch_size)
         return np.reshape(data[:sequence_length * batch_size], (batch_size, sequence_length))
 
         # num_batches = int(len(data) / (batch_size * num_steps))
         # return np.reshape(data[:num_batches * batch_size * num_steps], (batch_size, num_batches * num_steps))
-
-if __name__ == '__main__':
-    DataHandler.generate_data_npy('./data/MuseData.pickle')
-
-

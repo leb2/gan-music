@@ -28,11 +28,11 @@ class Gan:
             self.real_data = tf.placeholder(tf.float32,
                     shape=[self.batch_size, self.data_dim[0], self.data_dim[1], 1], name='real_data')
 
-            real_data = self.real_data # + tf.random_normal(self.real_data.shape, stddev=0.1)
+            real_data = self.real_data  # + tf.random_normal(self.real_data.shape, stddev=0.01)
             discriminator_real = self.discriminator(real_data)
             scope.reuse_variables()
 
-            fake_data = self.generated  # + tf.random_normal(self.generated.shape, stddev=0.1)
+            fake_data = self.generated  # + tf.random_normal(self.generated.shape, stddev=0.01)
             discriminator_fake = self.discriminator(fake_data, reuse=True)
 
         # To prevent numerical instabilities
@@ -115,14 +115,16 @@ class Gan:
         # Embedding is size [88, embedding_size]
         # output = tf.tensordot(self.embedding, d_input, [[0], [2]])
         # output = tf.transpose(output, perm=[1, 2, 0])
-        output = tf.layers.conv2d(d_input, filters=filters, kernel_size=3, padding=padding, reuse=reuse, name='conv1',
+        output = tf.layers.conv2d(d_input, filters=8, kernel_size=3, padding=padding, reuse=reuse, name='conv1',
                                   activation=tf.nn.leaky_relu)
         output = tf.contrib.layers.max_pool2d(output, kernel_size=3, stride=3, padding=padding)
+
         output = tf.layers.conv2d(output, filters=3, kernel_size=3, padding=padding, reuse=reuse, name='conv2',
                                   activation=tf.nn.leaky_relu)
-        output = tf.layers.conv2d(output, filters=3, kernel_size=3, padding=padding, reuse=reuse, name='conv3',
-                                  activation=tf.nn.leaky_relu)
+        # output = tf.layers.conv2d(output, filters=3, kernel_size=3, padding=padding, reuse=reuse, name='conv3',
+        #                           activation=tf.nn.leaky_relu)
         output = tf.contrib.layers.max_pool2d(output, kernel_size=3, stride=3, padding=padding)
+
         output = tf.contrib.layers.flatten(output)
 
         output = tf.layers.dense(output, 256, activation=tf.nn.tanh, reuse=reuse, name='fc1')
@@ -132,7 +134,7 @@ class Gan:
 
     @staticmethod
     def optimizer(loss, var_list):
-        return tf.train.AdamOptimizer(0.0005, beta1=0.5) \
+        return tf.train.AdamOptimizer(0.0005, beta1=0.5, beta2=0.9) \
             .minimize(loss, var_list=var_list)
 
     def sample_generator(self, midi_name, num_samples=3):
@@ -150,6 +152,7 @@ class Gan:
         d_counter = g_counter = 0
         avg_disc_loss = avg_gen_loss = 0
         prev_loss_d = 1.0
+        disc_train_count = 0
 
         # Original data [num_timesteps, 88]
         sequence_length = self.data_dim[0]
@@ -180,6 +183,7 @@ class Gan:
                     ops = [self.loss_d]
                     if prev_loss_d > 0.8:  # Only train if loss is greater than threshold
                         ops.append(self.opt_d)
+                        disc_train_count += 1
 
                     prev_loss_d = self.session.run(ops, feed_dict=feed_dict)[0]
                     total_loss_d += prev_loss_d
@@ -193,8 +197,9 @@ class Gan:
                 if (batch_num + 1) % 50 == 0 or (batch_num + 1) == num_batches:
                     avg_disc_loss = float(total_loss_d) / d_counter if d_counter > 0 else 0
                     avg_gen_loss = float(total_loss_g) / g_counter if d_counter > 0 else 0
-                    print("Before batch %d/%d\tDiscriminator Loss: %.3f \t Generator Loss: %.3f" %
-                          (batch_num + 1, num_batches, avg_disc_loss, avg_gen_loss))
+                    print("Before batch %d/%d\tDiscriminator Loss: %.3f \t Generator Loss: %.3f \t Train D: %d" %
+                          (batch_num + 1, num_batches, avg_disc_loss, avg_gen_loss, disc_train_count))
+                    disc_train_count = 0
 
             images = self.sample_generator("%05d" % (i,))
             self.save_summaries(avg_disc_loss, avg_gen_loss, images, step=i)
