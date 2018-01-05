@@ -1,11 +1,26 @@
 import numpy as np
 import midi
+import random
 
 MIDI_START = 21
 MIDI_END = 108
 
 
 class Util:
+    CONTINUE_SYMBOL = MIDI_END - MIDI_START + 1
+
+    @staticmethod
+    def sample_multiple(probabilities):
+        """
+        Treats each row of a 2d matrix as a probability distribution and returns sampled indices
+        :param probabilities: predictions with shape [batch_size, output_size]
+        :return: sampled indices with shape [batch_size]
+        """
+        cumulative = probabilities.cumsum(axis=1)
+        uniform = np.random.rand(len(cumulative), 1)
+        choices = (uniform < cumulative).argmax(axis=1)
+        return choices
+
     @staticmethod
     def sample(predictions, temperature=1.0):
         """
@@ -87,7 +102,8 @@ class DataHandler:
 
         data = []
         for time_step in continuous:
-            for note in sorted(time_step, reverse=True):
+            random.shuffle(time_step)
+            for note in time_step:  # sorted(time_step, reverse=True):
                 data.append(note - MIDI_START)
             data.append(MIDI_END - MIDI_START + 1)
 
