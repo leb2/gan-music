@@ -143,7 +143,7 @@ class Learner:
         :param initial_state: The initial state of the rnn
         :param reuse: Set to True if calling for second time onwards
         :param rnn_input: A tensor with shape [batch_size, num_steps, input_size]
-        :return: A tensor with shape [batch_size, 1, 1]
+        :return: A tensor with shape [batch_size, num_steps, 1]
         """
         discriminator = tf.contrib.rnn.MultiRNNCell([
             tf.contrib.rnn.GRUCell(self.rnn_size_d) for _ in range(self.num_rnn_layers_d)
